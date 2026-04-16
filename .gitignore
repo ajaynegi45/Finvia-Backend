@@ -1,6 +1,12 @@
+node_modules
+dist
+
+.env
+
+.drizzle
+coverage
+
+.DS_Store
 
 .idea
 .vscode
-.env
-
-node_modules
