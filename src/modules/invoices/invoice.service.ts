@@ -238,6 +238,7 @@ export const InvoiceService = {
         invoiceId: finalized.invoice.id,
         invoiceNumber: finalized.invoice.invoiceNumber ?? 'UNKNOWN',
       });
+      console.log(`[service] Enqueued background jobs for invoice ${finalized.invoice.invoiceNumber}`);
     } catch (error) {
       console.error('Failed to enqueue invoice jobs:', error);
     }

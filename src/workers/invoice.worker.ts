@@ -5,7 +5,7 @@ import { INVOICE_QUEUE_NAME } from '../modules/invoices/invoice.queue';
 async function simulateWork(label: string, invoiceNumber: string) {
   console.log('[worker] ' + label + ' started for ' + invoiceNumber);
   await new Promise((resolve) => setTimeout(resolve, 500));
-  console.log('[worker] ' + label + ' completed for ' + invoiceNumber);
+  console.log('[worker] ' + label + ' completed');
 }
 
 async function processJob(job: Job<{ invoiceId: string; invoiceNumber: string }>) {
