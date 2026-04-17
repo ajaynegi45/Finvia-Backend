@@ -1,64 +1,41 @@
-# Finvia Invoice Backend
+# Finvia - Enterprise Invoice Management System
 
-A robust invoice management system built with Express, PostgreSQL and BullMQ. This backend provides a secure, transaction-safe environment for managing the lifecycle of invoices, from draft creation to finalization and payment.
+Finvia provides a resilient backend for managing invoice lifecycles with strict state transitions, transactional audit trails, and asynchronous processing. The system handles high-concurrency environments through optimistic locking and decouples heavy operations like PDF generation and email dispatch using a robust task queue.
 
-## 🚀 Tech Stack
+## 🛠 Tech Stack
 
-- **Core**: [Express.js](https://expressjs.com/) (Node.js framework)
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Database**: [PostgreSQL](https://www.postgresql.org/) with [Drizzle ORM](https://orm.drizzle.team/)
-- **Queue & Background Jobs**: [BullMQ](https://docs.bullmq.io/) with [Redis](https://redis.io/)
-- **Validation**: [Zod](https://zod.dev/)
-- **Documentation**: [Swagger / OpenAPI](https://swagger.io/)
+- **Runtime**: Node.js with TypeScript
+- **Framework**: Express.js
+- **Database**: PostgreSQL (Persistence) & Redis (Task Queue)
+- **ORM**: Drizzle ORM
+- **Task Management**: BullMQ
+- **Validation**: Zod
+- **Documentation**: Swagger UI
+- **Testing**: Grafana k6
 
 ---
 
-## 🛠 Core Features
+## 🏗 Architectural Choices & Defense
 
-### 1. Strict State Machine Enforcement
-The system enforces a strict lifecycle for every invoice to ensure data integrity and prevent illegal operations.
+### 1. Feature-Based Modular Architecture
+The project organizes code into domain-specific modules (`src/modules/invoices`, `src/modules/products`, `src/modules/audit`).
+- **Defense**: This structure ensures clear boundaries. If a specific domain (like Invoices) requires massive scaling, its logic is already encapsulated, making it trivial to extract into a dedicated microservice without refactoring the entire codebase.
 
-**Transitions:**
-- `DRAFT` → `FINALIZED`: Once items are locked and an invoice number is assigned.
-- `FINALIZED` → `PAID`: Marking the invoice as settled.
-- `FINALIZED` → `VOID`: Cancelling the invoice (e.g., due to error).
+### 2. Transactional Audit Trail
+Every state change (Create, Finalize, Pay, Void) executes within a single PostgreSQL transaction that simultaneously updates the invoice and writes a record to the `audit_logs` table.
+- **Defense**: This guarantees absolute consistency between the system state and the audit trail. You can never have a status change without a corresponding audit log.
 
-> [!IMPORTANT]
-> - Only `DRAFT` invoices can be edited (items, quantities, totals).
-> - Once `FINALIZED`, the content is immutable.
-> - Illegal transitions (e.g., `DRAFT` → `PAID` or `PAID` → `VOID`) are blocked at the service layer by the state machine logic in `src/modules/invoices/invoice.state.ts`.
+### 3. Optimistic Concurrency Control
+The system uses a `version` column for all invoice updates. Every transition checks the current version before applying changes.
+- **Defense**: This prevents race conditions in high-concurrency scenarios (e.g., two users trying to finalize the same invoice simultaneously). The system rejects stale updates, ensuring data integrity without the performance overhead of pessimistic locking.
 
-### 2. Transaction-Safe Finalization & Concurrency
-Finalizing an invoice is a critical operation that involves generating a unique invoice number, calculating final totals, and updating the state.
+### 4. Immutable Snapshots
+When an invoice is created, the system snapshots product details (Name, SKU, Price) into the `invoice_items` table.
+- **Defense**: This preserves historical accuracy. Changing a product's price in the master catalog will not alter existing invoices, ensuring audit-compliant financial records.
 
-- **Atomic Transactions**: All database operations during finalization are wrapped in a single transaction to ensure "all-or-nothing" execution.
-- **Optimistic Concurrency Control (OCC)**: To prevent race conditions (e.g., two users editing the same invoice simultaneously), the system uses a `version` field. Every update checks the current version:
-  ```sql
-  UPDATE invoices 
-  SET status = 'FINALIZED', version = version + 1 
-  WHERE id = ? AND version = current_expected_version;
-  ```
-  If the version has changed in the meantime, the operation fails with a conflict error, prompting the user to refresh.
-
-### 3. Asynchronous Job Processing
-The backend utilizes **BullMQ** and **Redis** to handle time-consuming tasks outside the main request-response cycle.
-
-When an invoice is **FINALIZED**, the system automatically enqueues the following background jobs:
-- **`invoice.generate-pdf`**: Simulates the generation of a high-quality PDF document for the invoice.
-- **`invoice.send-email`**: Simulates dispatching the invoice to the customer's email.
-
-**Reliability Features:**
-- **Automatic Retries**: Failed jobs are retried up to 3 times with exponential backoff.
-- **Concurrency Control**: Dedicated workers (see `src/workers/invoice.worker.ts`) handle these tasks efficiently.
-
-### 4. Audit Logging
-Every state transition is meticulously tracked to provide a full audit trail.
-
-- **Status Timestamps**: Dedicated columns track when each milestone was reached:
-  - `finalizedAt`: When the invoice was finalized.
-  - `paidAt`: When the invoice was marked as paid.
-  - `voidedAt`: When the invoice was voided.
-- **User Context**: The `updatedBy` field stores the identifier of the actor who performed each transition, ensuring accountability for every state change.
+### 5. Decoupled Asynchronous Processing
+Heavy tasks (PDF generation, Email simulation) are offloaded to BullMQ workers once an invoice reaches the `FINALIZED` state.
+- **Defense**: This keeps the API responsive. Users receive a success response immediately, while the system handles background processing reliably with built-in retries and backoff strategies.
 
 ---
 
@@ -79,68 +56,48 @@ src/
 
 ---
 
-## 🚦 Getting Started
+## 🚀 Local Setup
 
 ### Prerequisites
+- Docker & Docker Compose
+- Grafana k6 (for running performance/verification tests)
 
-- **Node.js**: v18+
-- **PostgreSQL**: v14+
-- **Redis**: v6+
+### Quick Start (Docker)
+The most reliable way to run the entire stack (API, Worker, Postgres, Redis) is via Docker Compose.
 
-### Supabase + Drizzle connection setup
+```bash
+# 1. Clone the repository
+git clone <repo-url>
+cd invoice-backend
 
-For Supabase, use two database URLs:
+# 2. Start the entire system
+docker compose up -d
+```
 
-- `DATABASE_URL`: use the Supabase Session Pooler / Shared Pooler URL for the running app.
-- `DATABASE_MIGRATION_URL`: use the direct database URL for Drizzle migrations when possible.
-
-This split avoids a common issue where application traffic works through the pooler, but schema migrations fail because the CLI is using the wrong connection mode.
-
-If your environment cannot reach Supabase over IPv6, you can temporarily point `DATABASE_MIGRATION_URL` to the same value as `DATABASE_URL`, but direct connection is still the preferred option for migrations.
-
-### Installation
-
-1. Clone the repository:
-   ```bash
-   git clone <repo-url>
-   cd invoice-backend
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Set up environment variables:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your Supabase DB and Redis credentials
-   ```
-4. Generate and apply database migrations:
-   ```bash
-   npm run db:generate
-   npm run db:migrate
-   ```
-5. Start the development server:
-   ```bash
-   npm run dev
-   ```
-6. Start the worker in a second terminal:
-   ```bash
-   npm run worker:dev
-   ```
-7. Run the requirement verification flow:
-   ```bash
-   npm run verify:requirements
-   ```
-
-This script starts or reuses Docker Compose, applies migrations, runs a k6 end-to-end flow, verifies audit rows in PostgreSQL, and checks worker logs for the async jobs.
-
-### API Documentation
-
-Once the server is running, you can access the interactive Swagger UI at:
-`http://localhost:3000/docs`
+The API will be available at `http://localhost:3000`.
+Swagger Documentation: `http://localhost:3000/docs`
 
 ---
 
-## 📜 License
+## 🧪 Testing & Verification
 
-Created by **Ajay Negi**. Standard ISC License.
+The project includes a comprehensive verification suite that simulates end-to-end requirements.
+
+### Automated Requirement Verification
+The `verify` script automates the entire process: it starts the stack, runs a k6 requirements flow, verifies the audit trail in the database, and checks worker logs for async job completion.
+
+```bash
+npm run verify
+```
+
+### What the Verification Script checks:
+- **State Machine Integrity**: Rejects invalid transitions (e.g., DRAFT -> PAID).
+- **Audit Consistency**: Verifies that every status change created a valid audit log with the correct `actorId`.
+- **Async Delivery**: Scans worker logs to confirm that PDF generation and Email dispatch were triggered and completed successfully.
+
+---
+
+## 🛡 Security & Auth
+The system identifies actors via `x-user-id` and `x-user-role` headers.
+- Operations changing the system state (Post/Put) **require** these headers for the audit trail.
+- Mark as **PAID** requires the `admin` or `finance` role.

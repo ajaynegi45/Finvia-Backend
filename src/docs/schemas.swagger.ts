@@ -6,12 +6,12 @@
  *       type: apiKey
  *       in: header
  *       name: x-user-id
- *       description: Authenticated user identifier required for mutation endpoints.
+ *       description: "Authenticated user identifier (e.g., user_123). Required for all audit-logged actions."
  *     UserRoleHeaderAuth:
  *       type: apiKey
  *       in: header
  *       name: x-user-role
- *       description: Authenticated user role required for mutation endpoints.
+ *       description: "Authenticated user role (admin | finance | staff). Role 'admin' or 'finance' is required for payment operations."
  *   parameters:
  *     InvoiceIdParam:
  *       in: path

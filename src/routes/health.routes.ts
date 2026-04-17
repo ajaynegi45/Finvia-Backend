@@ -9,6 +9,7 @@ const router = Router();
  *   get:
  *     summary: Basic service health
  *     tags: [Health]
+ *     security: []
  *     responses:
  *       200:
  *         description: Service is running.
@@ -32,6 +33,7 @@ router.get('/', (req, res) => {
  *   get:
  *     summary: Database connectivity health
  *     tags: [Health]
+ *     security: []
  *     responses:
  *       200:
  *         description: Database connection is healthy.
