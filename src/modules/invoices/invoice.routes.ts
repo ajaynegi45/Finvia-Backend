@@ -54,6 +54,7 @@ router.post('/', requireAuth, validate(createInvoiceSchema, 'body'), asyncHandle
  *   get:
  *     summary: List invoices
  *     tags: [Invoices]
+ *     security: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -103,6 +104,7 @@ router.get('/', validate(listInvoicesQuerySchema, 'query'), asyncHandler(listInv
  *   get:
  *     summary: Get invoice detail
  *     tags: [Invoices]
+ *     security: []
  *     parameters:
  *       - $ref: '#/components/parameters/InvoiceIdParam'
  *     responses:

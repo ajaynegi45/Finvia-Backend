@@ -19,6 +19,12 @@ export const swaggerSpec = swaggerJSDoc({
       { name: 'Products', description: 'Product catalog endpoints' },
       { name: 'Invoices', description: 'Invoice lifecycle endpoints' },
     ],
+    security: [
+      {
+        UserIdHeaderAuth: [],
+        UserRoleHeaderAuth: [],
+      },
+    ],
   },
   apis: ['src/modules/**/*.ts', 'src/routes/**/*.ts', 'src/docs/**/*.ts'],
 });

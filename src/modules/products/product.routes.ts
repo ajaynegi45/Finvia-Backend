@@ -20,6 +20,7 @@ const router = Router();
  *   get:
  *     summary: List products
  *     tags: [Products]
+ *     security: []
  *     parameters:
  *       - in: query
  *         name: q
