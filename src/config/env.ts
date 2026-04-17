@@ -11,6 +11,7 @@ const envSchema = z.object({
     REDIS_PORT: z.coerce.number().int().positive().default(6379),
     REDIS_USERNAME: z.string().default('default'),
     REDIS_PASSWORD: z.string().optional(),
+    REDIS_USE_TLS: z.coerce.boolean().default(false),
 });
 
 export const env = envSchema.parse(process.env);

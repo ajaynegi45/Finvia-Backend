@@ -5,7 +5,7 @@ import { INVOICE_QUEUE_NAME } from '../modules/invoices/invoice.queue';
 async function simulateWork(label: string, invoiceNumber: string) {
   console.log('[worker] ' + label + ' started for ' + invoiceNumber);
   await new Promise((resolve) => setTimeout(resolve, 500));
-  console.log('[worker] ' + label + ' completed for ' + invoiceNumber);
+  console.log('[worker] ' + label + ' completed');
 }
 
 async function processJob(job: Job<{ invoiceId: string; invoiceNumber: string }>) {
@@ -30,11 +30,23 @@ export function startInvoiceWorker() {
     concurrency: 2,
   });
 
-  worker.on('completed', (job) => {
+  worker.on('ready', () => {
+    console.log('[worker] Connected to Redis and ready to process jobs');
+  });
+
+  worker.on('error', (err: Error) => {
+    console.error('[worker] Redis connection error:', err);
+  });
+
+  worker.on('closed', () => {
+    console.log('[worker] Connection closed');
+  });
+
+  worker.on('completed', (job: Job) => {
     console.log('[worker] completed job ' + job.name + ' (' + job.id + ')');
   });
 
-  worker.on('failed', (job, error) => {
+  worker.on('failed', (job: Job | undefined, error: Error) => {
     console.error(
       '[worker] failed job ' + job?.name + ' (' + job?.id + ') attempt ' + ((job?.attemptsMade ?? 0) + 1) + ':',
       error
