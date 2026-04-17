@@ -1,15 +1,88 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+########################################
+# BASIC CONFIG
+########################################
+
+# Stable compose project name → predictable container names
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-invoice-backend}"
+
+# Script is inside tests/scripts → go to repo root
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# Compose file location
 COMPOSE_FILE="$ROOT_DIR/docker-compose.yml"
+
+# Unique run id (used inside k6 + DB verification)
 RUN_ID="${RUN_ID:-$(date +%s)}"
+
+# API base URL
 BASE_URL="${BASE_URL:-http://localhost:3000}"
+
+# Used to filter worker logs only for this run
 START_TIME_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
+# Where k6 will write summary output
+SUMMARY_PATH="$ROOT_DIR/tests/k6/results-summary.json"
+
+########################################
+# BREW INSTALL HELPERS (MAC ONLY)
+########################################
+
+BREW_BIN=""
+
+detect_brew() {
+  # Try normal PATH first
+  if command -v brew >/dev/null 2>&1; then
+    BREW_BIN="$(command -v brew)"
+    return 0
+  fi
+
+  # Try common install paths
+  for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [ -x "$candidate" ]; then
+      BREW_BIN="$candidate"
+      eval "$("$BREW_BIN" shellenv)"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+install_if_missing() {
+  local cmd="$1"
+  local pkg="$2"
+
+  if command -v "$cmd" >/dev/null 2>&1; then
+    echo "$cmd already installed"
+    return
+  fi
+
+  if ! detect_brew; then
+    echo "Homebrew not found. Install it first: https://brew.sh"
+    exit 1
+  fi
+
+  echo "$cmd missing → installing via brew..."
+  "$BREW_BIN" install "$pkg"
+
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "Failed to install $cmd"
+    exit 1
+  fi
+}
+
+########################################
+# PRECHECKS
+########################################
+
+install_if_missing curl curl
+install_if_missing k6 k6
+
 if ! command -v docker >/dev/null 2>&1; then
-  echo "Docker is required but was not found in PATH."
+  echo "Docker not found"
   exit 1
 fi
 
@@ -18,27 +91,25 @@ if docker compose version >/dev/null 2>&1; then
 elif command -v docker-compose >/dev/null 2>&1; then
   COMPOSE_CMD=(docker-compose)
 else
-  echo "Docker Compose is required but was not found."
+  echo "Docker Compose not found"
   exit 1
 fi
 
 if ! docker info >/dev/null 2>&1; then
-  echo "Docker daemon is not running."
+  echo "Docker daemon not running"
   exit 1
 fi
 
-if ! command -v curl >/dev/null 2>&1; then
-  echo "curl is required for the health checks."
-  exit 1
-fi
-
-if ! command -v k6 >/dev/null 2>&1; then
-  echo "k6 is required but was not found. Install Grafana k6 and rerun this script."
-  exit 1
-fi
+# Ensure k6 summary folder exists
+mkdir -p "$(dirname "$SUMMARY_PATH")"
 
 cd "$ROOT_DIR"
 
+########################################
+# STACK MANAGEMENT
+########################################
+
+# Check if service is running
 service_is_running() {
   local service="$1"
   local running
@@ -46,6 +117,7 @@ service_is_running() {
   grep -qx "$service" <<<"$running"
 }
 
+# Check if images exist
 needs_build=false
 for service in app worker migrate; do
   if ! "${COMPOSE_CMD[@]}" images -q "$service" 2>/dev/null | grep -q .; then
@@ -54,6 +126,7 @@ for service in app worker migrate; do
   fi
 done
 
+# Check if stack is already up
 stack_ready=true
 for service in postgres redis app worker; do
   if ! service_is_running "$service"; then
@@ -63,21 +136,30 @@ for service in postgres redis app worker; do
 done
 
 if [ "$stack_ready" = true ]; then
-  echo "Reusing running Docker Compose stack."
+  echo "Reusing running stack"
 else
   if [ "$needs_build" = true ]; then
-    echo "Compose images missing. Building and starting stack."
+    echo "Building and starting stack"
     "${COMPOSE_CMD[@]}" up -d --build
   else
-    echo "Starting existing Compose stack."
+    echo "Starting existing stack"
     "${COMPOSE_CMD[@]}" up -d
   fi
 fi
 
-echo "Applying migrations..."
+########################################
+# MIGRATIONS
+########################################
+
+echo "Running migrations..."
 "${COMPOSE_CMD[@]}" run --rm migrate >/dev/null
 
-echo "Waiting for API health endpoint..."
+########################################
+# HEALTH CHECK
+########################################
+
+echo "Waiting for API..."
+
 for _ in $(seq 1 60); do
   if curl -fsS "$BASE_URL/health" >/dev/null 2>&1; then
     break
@@ -86,20 +168,56 @@ for _ in $(seq 1 60); do
 done
 
 if ! curl -fsS "$BASE_URL/health" >/dev/null 2>&1; then
-  echo "API did not become healthy in time."
+  echo "API not healthy"
   exit 1
 fi
 
-echo "Running k6 requirement verification flow..."
+########################################
+# RUN K6 TEST
+########################################
+
+echo "Running k6..."
 k6 run "$ROOT_DIR/tests/k6/requirements-flow.js" \
   -e BASE_URL="$BASE_URL" \
-  -e RUN_ID="$RUN_ID"
+  -e RUN_ID="$RUN_ID" \
+  -e SUMMARY_PATH="$SUMMARY_PATH"
 
-echo "Waiting briefly for worker jobs to finish..."
-sleep 4
+########################################
+# WORKER VERIFICATION (IMPORTANT FIX)
+########################################
 
-echo
-echo "Checking database evidence..."
+echo "Checking worker logs..."
+
+worker_ok=false
+
+# Poll logs instead of fixed sleep
+for _ in $(seq 1 30); do
+  LOGS="$("${COMPOSE_CMD[@]}" logs --since "$START_TIME_UTC" --no-color worker 2>/dev/null || true)"
+
+  if grep -q "PDF generation completed" <<<"$LOGS" && \
+     grep -q "Email dispatch completed" <<<"$LOGS"; then
+    worker_ok=true
+    break
+  fi
+
+  sleep 2
+done
+
+# If not found → print logs (critical for debugging)
+if [ "$worker_ok" != true ]; then
+  echo "Worker jobs not observed"
+  echo
+  echo "Last worker logs:"
+  "${COMPOSE_CMD[@]}" logs --no-color --tail=200 worker || true
+  exit 1
+fi
+
+########################################
+# DATABASE VERIFICATION
+########################################
+
+echo "Checking database..."
+
 DB_REPORT="$("${COMPOSE_CMD[@]}" exec -T postgres psql -U postgres -d invoice_db -At -F '|' -c "
 SELECT
   i.customer_name,
@@ -118,39 +236,38 @@ echo "$DB_REPORT"
 paid_line="$(grep "^K6 Paid Flow $RUN_ID|" <<<"$DB_REPORT" || true)"
 void_line="$(grep "^K6 Void Flow $RUN_ID|" <<<"$DB_REPORT" || true)"
 
+########################################
+# STRICT ASSERTIONS
+########################################
+
 if [[ "$paid_line" != *"|PAID|"* ]]; then
-  echo "Requirement check failed: paid invoice was not found in PAID state."
+  echo "Paid invoice failed"
   exit 1
 fi
 
-if [[ "$paid_line" != *"INVOICE_CREATED"* || "$paid_line" != *"INVOICE_ITEMS_UPDATED"* || "$paid_line" != *"INVOICE_FINALIZED"* || "$paid_line" != *"INVOICE_PAID"* ]]; then
-  echo "Requirement check failed: paid invoice audit trail is incomplete."
+if [[ "$paid_line" != *"INVOICE_CREATED"* || \
+      "$paid_line" != *"INVOICE_ITEMS_UPDATED"* || \
+      "$paid_line" != *"INVOICE_FINALIZED"* || \
+      "$paid_line" != *"INVOICE_PAID"* ]]; then
+  echo "Paid audit trail incomplete"
   exit 1
 fi
 
 if [[ "$void_line" != *"|VOID|"* ]]; then
-  echo "Requirement check failed: void invoice was not found in VOID state."
+  echo "Void invoice failed"
   exit 1
 fi
 
-if [[ "$void_line" != *"INVOICE_CREATED"* || "$void_line" != *"INVOICE_FINALIZED"* || "$void_line" != *"INVOICE_VOIDED"* ]]; then
-  echo "Requirement check failed: void invoice audit trail is incomplete."
+if [[ "$void_line" != *"INVOICE_CREATED"* || \
+      "$void_line" != *"INVOICE_FINALIZED"* || \
+      "$void_line" != *"INVOICE_VOIDED"* ]]; then
+  echo "Void audit trail incomplete"
   exit 1
 fi
+
+########################################
+# SUCCESS
+########################################
 
 echo
-echo "Checking worker logs for async jobs..."
-WORKER_LOGS="$("${COMPOSE_CMD[@]}" logs worker --since "$START_TIME_UTC" 2>/dev/null || true)"
-
-if ! grep -q "PDF generation completed" <<<"$WORKER_LOGS"; then
-  echo "Requirement check failed: PDF generation job was not observed in worker logs."
-  exit 1
-fi
-
-if ! grep -q "Email dispatch completed" <<<"$WORKER_LOGS"; then
-  echo "Requirement check failed: email dispatch job was not observed in worker logs."
-  exit 1
-fi
-
-echo
-echo "Requirement verification passed for run id $RUN_ID."
+echo "Verification passed for RUN_ID=$RUN_ID"
