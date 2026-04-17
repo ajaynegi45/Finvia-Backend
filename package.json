@@ -13,8 +13,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "docker:up": "docker compose up --build",
-    "docker:down": "docker compose down -v"
+
+    "verify": "bash tests/scripts/run-k6-requirements.sh"
   },
   "keywords": [],
   "author": "Ajay Negi",
