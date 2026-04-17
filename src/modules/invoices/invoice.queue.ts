@@ -28,11 +28,9 @@ invoiceQueue.on('error', (err: Error) => {
   console.error('[queue] Redis connection error:', err);
 });
 
-invoiceQueue.on('error', (err: Error) => {
-  console.error('[queue] Redis connection error:', err);
-});
-
 export async function enqueueInvoiceFinalizedJobs(payload: { invoiceId: string; invoiceNumber: string }) {
+  console.log(`[queue] Adding jobs for invoice ${payload.invoiceNumber} (id=${payload.invoiceId})`);
+
   const jobs = await Promise.all([
     invoiceQueue.add('invoice.generate-pdf', payload, {
       ...defaultJobOptions,
