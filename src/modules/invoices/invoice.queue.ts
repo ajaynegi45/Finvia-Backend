@@ -34,11 +34,11 @@ export async function enqueueInvoiceFinalizedJobs(payload: { invoiceId: string; 
   const jobs = await Promise.all([
     invoiceQueue.add('invoice.generate-pdf', payload, {
       ...defaultJobOptions,
-      jobId: 'pdf:' + payload.invoiceId,
+      jobId: 'pdf-' + payload.invoiceId,
     }),
     invoiceQueue.add('invoice.send-email', payload, {
       ...defaultJobOptions,
-      jobId: 'email:' + payload.invoiceId,
+      jobId: 'email-' + payload.invoiceId,
     }),
   ]);
 

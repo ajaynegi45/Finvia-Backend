@@ -223,7 +223,7 @@ SELECT
   i.customer_name,
   i.status,
   COUNT(a.id),
-  COALESCE(string_agg(a.action, ',' ORDER BY a.created_at), '')
+  COALESCE(string_agg(a.action::text, ',' ORDER BY a.created_at), '')
 FROM invoices i
 LEFT JOIN audit_logs a ON a.invoice_id = i.id
 WHERE i.customer_name IN ('K6 Paid Flow $RUN_ID', 'K6 Void Flow $RUN_ID')
