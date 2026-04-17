@@ -15,7 +15,7 @@ export function validate(schema: ZodTypeAny, target: ValidateTarget) {
 
     if (!result.success) {
       return next(
-        new AppError('Validation failed', 400, JSON.stringify(result.error.flatten()))
+        new AppError('Validation failed', 400, 'VALIDATION_ERROR', result.error.flatten())
       );
     }
 

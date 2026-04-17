@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
+import { requireAuth } from '../../middlewares/auth.middleware';
 import { validate } from '../../middlewares/validate.middleware';
 import { createProductSchema, listProductsQuerySchema } from './product.schemas';
 import { createProductHandler, listProductsHandler, seedProductsHandler } from './product.controller';
@@ -75,7 +76,7 @@ router.get('/', validate(listProductsQuerySchema, 'query'), asyncHandler(listPro
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.post('/', validate(createProductSchema, 'body'), asyncHandler(createProductHandler));
+router.post('/', requireAuth, validate(createProductSchema, 'body'), asyncHandler(createProductHandler));
 
 /**
  * @swagger
@@ -98,6 +99,6 @@ router.post('/', validate(createProductSchema, 'body'), asyncHandler(createProdu
  *                       items:
  *                         $ref: '#/components/schemas/Product'
  */
-router.post('/fake-data', asyncHandler(seedProductsHandler));
+router.post('/fake-data', requireAuth, asyncHandler(seedProductsHandler));
 
 export default router;
