@@ -43,15 +43,19 @@ Heavy tasks (PDF generation, Email simulation) are offloaded to BullMQ workers o
 
 ```text
 src/
-├── config/             # Database and Redis configurations
-├── db/                 # Drizzle schema and migrations
-├── middlewares/        # Error handling and authentication
+├── config/             # DB, Redis, and Swagger configurations
+├── db/                 # Drizzle schema and bootstrap logic
+│   └── schema/         # Table definitions (Invoices, Items, Products, Audit)
+├── middlewares/        # Auth, role-based access, and validation
 ├── modules/            # Domain-driven feature modules
-│   ├── invoices/       # Invoice management (Service, Repo, State, Queue)
-│   └── products/       # Product catalog management
-├── utils/              # Calculation helpers (Money, Pagination)
+│   ├── invoices/       # Core business logic (Service, Repo, State, Queue)
+│   ├── products/       # Product catalog management
+│   └── audit/          # Audit logging service
+├── routes/             # API route aggregation and health checks
+├── utils/              # Shared helpers (Money, Pagination, Response)
 ├── workers/            # BullMQ background job handlers
-└── server.ts           # Application entry point
+├── server.ts           # Application API entry point
+└── worker.ts           # Background job worker entry point
 ```
 
 ---
@@ -70,7 +74,10 @@ The most reliable way to run the entire stack (API, Worker, Postgres, Redis) is 
 git clone <repo-url>
 cd invoice-backend
 
-# 2. Start the entire system
+# 2. Build the system images
+docker compose build
+
+# 3. Start all services in the background
 docker compose up -d
 ```
 
