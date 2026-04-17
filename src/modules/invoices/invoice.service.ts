@@ -92,13 +92,7 @@ function mapDetail(invoice: any, items: any[]): InvoiceDetail {
 }
 
 async function loadInvoiceDetail(invoiceId: string): Promise<InvoiceDetail | null> {
-  return db.transaction(async (tx) => {
-    const invoice = await InvoiceRepository.findById(tx, invoiceId);
-    if (!invoice) return null;
-
-    const items = await InvoiceItemRepository.findByInvoiceId(tx, invoiceId);
-    return mapDetail(invoice, items);
-  });
+  return InvoiceRepository.getDetail(db, invoiceId);
 }
 
 export const InvoiceService = {

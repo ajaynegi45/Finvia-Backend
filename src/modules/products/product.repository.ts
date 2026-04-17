@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray } from 'drizzle-orm';
 import { db } from '../../config/db';
 import { products } from '../../db/schema/products';
 import type { ProductListItem, ProductRecord } from '../../types/domain';
@@ -43,8 +43,14 @@ export const ProductRepository = {
 
   async findByIds(ids: string[]) {
     if (ids.length === 0) return [] as ProductRecord[];
-    const rows = await db.select().from(products);
-    return rows.filter((row) => ids.includes(row.id)).map(mapRow);
+    const rows = await db.select().from(products).where(inArray(products.id, ids));
+    return rows.map(mapRow);
+  },
+
+  async findBySkus(skus: string[]) {
+    if (skus.length === 0) return [] as ProductRecord[];
+    const rows = await db.select().from(products).where(inArray(products.sku, skus)).orderBy(desc(products.createdAt));
+    return rows.map(mapRow);
   },
 
   async findById(id: string) {
@@ -57,8 +63,13 @@ export const ProductRepository = {
     return mapRow(row);
   },
 
-  async bulkCreate(data: (typeof products.$inferInsert)[]) {
-    const rows = await db.insert(products).values(data).returning();
-    return rows.map(mapRow);
+  async bulkCreateIgnoreConflicts(data: (typeof products.$inferInsert)[]) {
+    if (data.length === 0) return [] as ProductRecord[];
+
+    await db.insert(products).values(data).onConflictDoNothing({
+      target: products.sku,
+    });
+
+    return this.findBySkus(data.map((item) => item.sku));
   },
 };

@@ -1,6 +1,26 @@
 /**
  * @swagger
  * components:
+ *   securitySchemes:
+ *     UserIdHeaderAuth:
+ *       type: apiKey
+ *       in: header
+ *       name: x-user-id
+ *       description: Authenticated user identifier required for mutation endpoints.
+ *     UserRoleHeaderAuth:
+ *       type: apiKey
+ *       in: header
+ *       name: x-user-role
+ *       description: Authenticated user role required for mutation endpoints.
+ *   parameters:
+ *     InvoiceIdParam:
+ *       in: path
+ *       name: invoiceId
+ *       required: true
+ *       schema:
+ *         type: string
+ *         format: uuid
+ *       description: Invoice identifier.
  *   schemas:
  *     Product:
  *       type: object
@@ -38,7 +58,6 @@
  *         updatedAt:
  *           type: string
  *           format: date-time
- *
  *     CreateProductInput:
  *       type: object
  *       required:
@@ -61,56 +80,18 @@
  *         unitPricePaise:
  *           type: integer
  *           minimum: 1
- *
- *     Invoice:
+ *     InvoiceItemInput:
  *       type: object
  *       required:
- *         - id
- *         - status
- *         - customerName
- *         - subtotalPaise
- *         - taxPaise
- *         - totalPaise
- *         - createdBy
- *         - createdAt
- *         - updatedAt
+ *         - productId
+ *         - quantity
  *       properties:
- *         id:
+ *         productId:
  *           type: string
  *           format: uuid
- *         invoiceNumber:
- *           type: string
- *           nullable: true
- *         status:
- *           type: string
- *           enum: [DRAFT, FINALIZED, PAID, VOID]
- *         customerName:
- *           type: string
- *         notes:
- *           type: string
- *           nullable: true
- *         subtotalPaise:
+ *         quantity:
  *           type: integer
- *         taxPaise:
- *           type: integer
- *         totalPaise:
- *           type: integer
- *         createdBy:
- *           type: string
- *         updatedBy:
- *           type: string
- *           nullable: true
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
- *         items:
- *           type: array
- *           items:
- *             $ref: '#/components/schemas/InvoiceItem'
- *
+ *           minimum: 1
  *     InvoiceItem:
  *       type: object
  *       required:
@@ -138,7 +119,63 @@
  *           type: integer
  *         lineTotalPaise:
  *           type: integer
- *
+ *     InvoiceSummary:
+ *       type: object
+ *       required:
+ *         - id
+ *         - status
+ *         - customerName
+ *         - subtotalPaise
+ *         - taxPaise
+ *         - totalPaise
+ *         - createdBy
+ *         - createdAt
+ *         - updatedAt
+ *       properties:
+ *         id:
+ *           type: string
+ *           format: uuid
+ *         invoiceNumber:
+ *           type: string
+ *           nullable: true
+ *         status:
+ *           type: string
+ *           enum: [DRAFT, FINALIZED, PAID, VOID]
+ *         customerName:
+ *           type: string
+ *         subtotalPaise:
+ *           type: integer
+ *         taxPaise:
+ *           type: integer
+ *         totalPaise:
+ *           type: integer
+ *         createdBy:
+ *           type: string
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *     InvoiceDetail:
+ *       allOf:
+ *         - $ref: '#/components/schemas/InvoiceSummary'
+ *         - type: object
+ *           required:
+ *             - notes
+ *             - updatedBy
+ *             - items
+ *           properties:
+ *             notes:
+ *               type: string
+ *               nullable: true
+ *             updatedBy:
+ *               type: string
+ *               nullable: true
+ *             items:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/InvoiceItem'
  *     CreateInvoiceInput:
  *       type: object
  *       required:
@@ -151,24 +188,13 @@
  *           maxLength: 255
  *         notes:
  *           type: string
- *           maxLength: 2000
  *           nullable: true
+ *           maxLength: 2000
  *         items:
  *           type: array
  *           minItems: 1
  *           items:
- *             type: object
- *             required:
- *               - productId
- *               - quantity
- *             properties:
- *               productId:
- *                 type: string
- *                 format: uuid
- *               quantity:
- *                 type: integer
- *                 minimum: 1
- *
+ *             $ref: '#/components/schemas/InvoiceItemInput'
  *     UpdateInvoiceItemsInput:
  *       type: object
  *       required:
@@ -178,20 +204,28 @@
  *           type: array
  *           minItems: 1
  *           items:
- *             type: object
- *             required:
- *               - productId
- *               - quantity
- *             properties:
- *               productId:
- *                 type: string
- *                 format: uuid
- *               quantity:
- *                 type: integer
- *                 minimum: 1
- *
+ *             $ref: '#/components/schemas/InvoiceItemInput'
+ *     PaginationMeta:
+ *       type: object
+ *       required:
+ *         - page
+ *         - limit
+ *         - total
+ *         - totalPages
+ *       properties:
+ *         page:
+ *           type: integer
+ *         limit:
+ *           type: integer
+ *         total:
+ *           type: integer
+ *         totalPages:
+ *           type: integer
  *     ApiResponse:
  *       type: object
+ *       required:
+ *         - success
+ *         - data
  *       properties:
  *         success:
  *           type: boolean
@@ -199,30 +233,88 @@
  *         data:
  *           type: object
  *         meta:
- *           type: object
- *           properties:
- *             page:
- *               type: integer
- *             limit:
- *               type: integer
- *             total:
- *               type: integer
- *             totalPages:
- *               type: integer
- *
+ *           $ref: '#/components/schemas/PaginationMeta'
  *     ErrorResponse:
  *       type: object
+ *       required:
+ *         - success
+ *         - error
+ *         - path
+ *         - timestamp
  *       properties:
  *         success:
  *           type: boolean
  *           example: false
  *         error:
  *           type: object
+ *           required:
+ *             - code
+ *             - message
  *           properties:
- *             message:
- *               type: string
  *             code:
  *               type: string
- *             status:
- *               type: integer
+ *             message:
+ *               type: string
+ *             details:
+ *               type: object
+ *               additionalProperties: true
+ *               nullable: true
+ *         path:
+ *           type: string
+ *         timestamp:
+ *           type: string
+ *           format: date-time
+ *     HealthResponse:
+ *       type: object
+ *       properties:
+ *         success:
+ *           type: boolean
+ *           example: true
+ *         status:
+ *           type: string
+ *           example: ok
+ *         service:
+ *           type: string
+ *         database:
+ *           type: string
+ *         timestamp:
+ *           type: string
+ *           format: date-time
+ *   responses:
+ *     BadRequest:
+ *       description: Request validation failed.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ErrorResponse'
+ *     Unauthorized:
+ *       description: Missing or invalid authentication headers.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ErrorResponse'
+ *     Forbidden:
+ *       description: Authenticated user is not allowed to perform this action.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ErrorResponse'
+ *     NotFound:
+ *       description: Requested resource was not found.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ErrorResponse'
+ *     Conflict:
+ *       description: Request conflicts with the current invoice state.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ErrorResponse'
+ *     InternalServerError:
+ *       description: Unexpected server error.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ErrorResponse'
  */

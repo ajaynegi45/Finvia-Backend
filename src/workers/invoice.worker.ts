@@ -9,6 +9,8 @@ async function simulateWork(label: string, invoiceNumber: string) {
 }
 
 async function processJob(job: Job<{ invoiceId: string; invoiceNumber: string }>) {
+  console.log('[worker] processing job ' + job.name + ' (' + job.id + ') attempt ' + (job.attemptsMade + 1));
+
   if (job.name === 'invoice.generate-pdf') {
     await simulateWork('PDF generation', job.data.invoiceNumber);
     return { ok: true, type: 'pdf' };
@@ -33,7 +35,10 @@ export function startInvoiceWorker() {
   });
 
   worker.on('failed', (job, error) => {
-    console.error('[worker] failed job ' + job?.name + ' (' + job?.id + '):', error);
+    console.error(
+      '[worker] failed job ' + job?.name + ' (' + job?.id + ') attempt ' + ((job?.attemptsMade ?? 0) + 1) + ':',
+      error
+    );
   });
 
   console.log('[worker] invoice worker started');
