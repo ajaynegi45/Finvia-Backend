@@ -2,15 +2,19 @@
   "name": "finvia-backend",
   "version": "1.0.0",
   "description": "",
-  "main": "server.js",
+  "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "worker:dev": "tsx watch src/worker.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
+    "worker:start": "node dist/worker.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down -v"
   },
   "keywords": [],
   "author": "Ajay Negi",
@@ -37,11 +41,7 @@
     "@types/pg": "^8.20.0",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
-    "@typescript-eslint/eslint-plugin": "^8.58.2",
-    "@typescript-eslint/parser": "^8.58.2",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^10.2.0",
-    "prettier": "^3.8.3",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }

@@ -9,7 +9,7 @@ import { createProductHandler, listProductsHandler, seedProductsHandler } from '
  * @swagger
  * tags:
  *   name: Products
- *   description: Product management endpoints
+ *   description: Product catalog endpoints.
  */
 
 const router = Router();
@@ -18,23 +18,23 @@ const router = Router();
  * @swagger
  * /products:
  *   get:
- *     summary: List available products
+ *     summary: List products
  *     tags: [Products]
  *     parameters:
  *       - in: query
  *         name: q
  *         schema:
  *           type: string
- *         description: Search query for product name
+ *         description: Search by product name.
  *       - in: query
  *         name: activeOnly
  *         schema:
  *           type: boolean
  *           default: true
- *         description: Filter only active products
+ *         description: Only return active products when true.
  *     responses:
  *       200:
- *         description: List of products
+ *         description: Product list.
  *         content:
  *           application/json:
  *             schema:
@@ -46,6 +46,8 @@ const router = Router();
  *                       type: array
  *                       items:
  *                         $ref: '#/components/schemas/Product'
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
  */
 router.get('/', validate(listProductsQuerySchema, 'query'), asyncHandler(listProductsHandler));
 
@@ -53,8 +55,11 @@ router.get('/', validate(listProductsQuerySchema, 'query'), asyncHandler(listPro
  * @swagger
  * /products:
  *   post:
- *     summary: Create a new product
+ *     summary: Create a product
  *     tags: [Products]
+ *     security:
+ *       - UserIdHeaderAuth: []
+ *         UserRoleHeaderAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -63,7 +68,7 @@ router.get('/', validate(listProductsQuerySchema, 'query'), asyncHandler(listPro
  *             $ref: '#/components/schemas/CreateProductInput'
  *     responses:
  *       201:
- *         description: Product created
+ *         description: Product created.
  *         content:
  *           application/json:
  *             schema:
@@ -75,6 +80,8 @@ router.get('/', validate(listProductsQuerySchema, 'query'), asyncHandler(listPro
  *                       $ref: '#/components/schemas/Product'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
  */
 router.post('/', requireAuth, validate(createProductSchema, 'body'), asyncHandler(createProductHandler));
 
@@ -82,11 +89,15 @@ router.post('/', requireAuth, validate(createProductSchema, 'body'), asyncHandle
  * @swagger
  * /products/fake-data:
  *   post:
- *     summary: Seed fake product data
+ *     summary: Seed the demo product catalog
  *     tags: [Products]
+ *     description: Idempotent helper route for local/demo usage. Existing SKUs are skipped.
+ *     security:
+ *       - UserIdHeaderAuth: []
+ *         UserRoleHeaderAuth: []
  *     responses:
  *       201:
- *         description: Fake data seeded successfully
+ *         description: Seeded products returned.
  *         content:
  *           application/json:
  *             schema:
@@ -98,6 +109,8 @@ router.post('/', requireAuth, validate(createProductSchema, 'body'), asyncHandle
  *                       type: array
  *                       items:
  *                         $ref: '#/components/schemas/Product'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
  */
 router.post('/fake-data', requireAuth, asyncHandler(seedProductsHandler));
 

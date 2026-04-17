@@ -49,6 +49,6 @@ export const ProductService = {
   },
 
   seedFakeProducts() {
-    return ProductRepository.bulkCreate(FAKE_PRODUCTS);
+    return ProductRepository.bulkCreateIgnoreConflicts(FAKE_PRODUCTS);
   },
 };

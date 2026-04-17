@@ -40,5 +40,7 @@ export const invoices = pgTable(
     },
     (table) => [
         index('invoices_status_idx').on(table.status),
+        index('invoices_created_at_idx').on(table.createdAt),
+        index('invoices_status_created_at_idx').on(table.status, table.createdAt),
     ]
 );
