@@ -127,6 +127,12 @@ If your environment cannot reach Supabase over IPv6, you can temporarily point `
    ```bash
    npm run worker:dev
    ```
+7. Run the requirement verification flow:
+   ```bash
+   npm run verify:requirements
+   ```
+
+This script starts or reuses Docker Compose, applies migrations, runs a k6 end-to-end flow, verifies audit rows in PostgreSQL, and checks worker logs for the async jobs.
 
 ### API Documentation
 

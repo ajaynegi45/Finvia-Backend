@@ -11,3 +11,4 @@ coverage
 .idea
 .vscode
 Task.md
+tests/k6/results-summary.json
