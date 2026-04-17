@@ -9,6 +9,8 @@ const envSchema = z.object({
     DATABASE_REQUIRE_SSL: z.coerce.boolean().default(false),
     REDIS_HOST: z.string().min(1, 'REDIS_HOST is required'),
     REDIS_PORT: z.coerce.number().int().positive().default(6379),
+    REDIS_USERNAME: z.string().default('default'),
+    REDIS_PASSWORD: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
