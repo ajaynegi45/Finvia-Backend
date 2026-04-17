@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
 export const invoiceIdParamSchema = z.object({
-  invoiceId: z.string().uuid(),
+  invoiceId: z.uuid(),
 });
 
 export const invoiceItemInputSchema = z.object({
-  productId: z.string().uuid(),
+  productId: z.uuid(),
   quantity: z.coerce.number().int().positive(),
 });
 

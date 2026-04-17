@@ -87,6 +87,17 @@ src/
 - **PostgreSQL**: v14+
 - **Redis**: v6+
 
+### Supabase + Drizzle connection setup
+
+For Supabase, use two database URLs:
+
+- `DATABASE_URL`: use the Supabase Session Pooler / Shared Pooler URL for the running app.
+- `DATABASE_MIGRATION_URL`: use the direct database URL for Drizzle migrations when possible.
+
+This split avoids a common issue where application traffic works through the pooler, but schema migrations fail because the CLI is using the wrong connection mode.
+
+If your environment cannot reach Supabase over IPv6, you can temporarily point `DATABASE_MIGRATION_URL` to the same value as `DATABASE_URL`, but direct connection is still the preferred option for migrations.
+
 ### Installation
 
 1. Clone the repository:
@@ -101,15 +112,20 @@ src/
 3. Set up environment variables:
    ```bash
    cp .env.example .env
-   # Edit .env with your local DB and Redis credentials
+   # Edit .env with your Supabase DB and Redis credentials
    ```
-4. Run database migrations:
+4. Generate and apply database migrations:
    ```bash
-   npm run db:push
+   npm run db:generate
+   npm run db:migrate
    ```
 5. Start the development server:
    ```bash
    npm run dev
+   ```
+6. Start the worker in a second terminal:
+   ```bash
+   npm run worker:dev
    ```
 
 ### API Documentation

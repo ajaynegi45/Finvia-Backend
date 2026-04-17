@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, integer, timestamp, uuid, index } from 'drizzle-orm/pg-core';
+import { pgEnum, pgSequence, pgTable, text, integer, timestamp, uuid, index } from 'drizzle-orm/pg-core';
 
 export const invoiceStatusEnum = pgEnum('invoice_status', [
     'DRAFT',
@@ -6,6 +6,13 @@ export const invoiceStatusEnum = pgEnum('invoice_status', [
     'PAID',
     'VOID',
 ]);
+
+export const invoiceNumberSeq = pgSequence('invoice_number_seq', {
+    startWith: 1,
+    increment: 1,
+    minValue: 1,
+    cache: 1,
+});
 
 export const invoices = pgTable(
     'invoices',
@@ -20,9 +27,13 @@ export const invoices = pgTable(
         subtotalPaise: integer('subtotal_paise').notNull().default(0),
         taxPaise: integer('tax_paise').notNull().default(0),
         totalPaise: integer('total_paise').notNull().default(0),
+        version: integer('version').notNull().default(1),
 
         createdBy: text('created_by').notNull(),
         updatedBy: text('updated_by'),
+        finalizedAt: timestamp('finalized_at', { withTimezone: true }),
+        paidAt: timestamp('paid_at', { withTimezone: true }),
+        voidedAt: timestamp('voided_at', { withTimezone: true }),
 
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

@@ -1,4 +1,5 @@
 CREATE TYPE "public"."invoice_status" AS ENUM('DRAFT', 'FINALIZED', 'PAID', 'VOID');--> statement-breakpoint
+CREATE SEQUENCE "public"."invoice_number_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1;--> statement-breakpoint
 CREATE TABLE "invoice_items" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"invoice_id" uuid NOT NULL,
@@ -21,8 +22,12 @@ CREATE TABLE "invoices" (
 	"subtotal_paise" integer DEFAULT 0 NOT NULL,
 	"tax_paise" integer DEFAULT 0 NOT NULL,
 	"total_paise" integer DEFAULT 0 NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"created_by" text NOT NULL,
 	"updated_by" text,
+	"finalized_at" timestamp with time zone,
+	"paid_at" timestamp with time zone,
+	"voided_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "invoices_invoice_number_unique" UNIQUE("invoice_number")

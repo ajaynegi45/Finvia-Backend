@@ -19,9 +19,9 @@ export function validate(schema: ZodTypeAny, target: ValidateTarget) {
       );
     }
 
-    if (target === 'body') req.validatedBody = result.data;
-    if (target === 'query') req.validatedQuery = result.data;
-    if (target === 'params') req.validatedParams = result.data;
+    if (target === 'body') req.validatedBody = result.data as typeof req.validatedBody;
+    if (target === 'query') req.validatedQuery = result.data as typeof req.validatedQuery;
+    if (target === 'params') req.validatedParams = result.data as typeof req.validatedParams;
 
     next();
   };
