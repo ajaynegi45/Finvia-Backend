@@ -42,16 +42,27 @@ Finvia provides a resilient backend for managing invoice lifecycles with strict 
 ## 🏗 Project Structure
 
 ```text
-src/
-├── config/             # Database and Redis configurations
-├── db/                 # Drizzle schema and migrations
-├── middlewares/        # Error handling and authentication
-├── modules/            # Domain-driven feature modules
-│   ├── invoices/       # Invoice management (Service, Repo, State, Queue)
-│   └── products/       # Product catalog management
-├── utils/              # Calculation helpers (Money, Pagination)
-├── workers/            # BullMQ background job handlers
-└── server.ts           # Application entry point
+├── src/                # Application source code
+│   ├── config/         # Database, Redis, and Swagger configurations
+│   ├── db/             # Drizzle schema and bootstrap logic
+│   │   └── schema/     # Table definitions (Invoices, Items, Products, Audit)
+│   ├── middlewares/    # Auth, role-based access, and validation
+│   ├── modules/        # Domain-driven feature modules
+│   │   ├── invoices/   # Core business logic (Service, Repo, State, Queue)
+│   │   ├── products/   # Product catalog management
+│   │   └── audit/      # Audit logging service
+│   ├── routes/         # API route aggregation and health checks
+│   ├── types/          # Centralized TypeScript domain definitions
+│   ├── utils/          # Shared helpers (Money, Pagination, Response)
+│   ├── workers/        # BullMQ background job handlers
+│   ├── app.ts          # Express application setup 
+│   ├── server.ts       # Application API entry point
+│   └── worker.ts       # Background job worker entry point
+├── tests/              # Test infrastructure
+│   ├── k6/             # Requirement flow and performance tests
+│   └── scripts/        # Bash scripts for requirement verification
+├── Dockerfile          # Multi-stage production build definition
+└── docker-compose.yml  # Local stack orchestration
 ```
 
 ---
@@ -63,19 +74,32 @@ src/
 - Grafana k6 (for running performance/verification tests)
 
 ### Quick Start (Docker)
-The most reliable way to run the entire stack (API, Worker, Postgres, Redis) is via Docker Compose.
 
+This system uses **Docker Compose** to run the API, Worker, Database, and Cache together. Even if you don't have Node.js installed locally, you can run everything with these commands.
+
+#### 1. Build the Application
+This step compiles the TypeScript code and prepares the container images for the API and the background worker.
 ```bash
-# 1. Clone the repository
-git clone <repo-url>
-cd invoice-backend
+docker compose build
+```
 
-# 2. Start the entire system
+#### 2. Start the Stack
+This starts all services (API, Worker, Postgres, Redis) in the background. Docker will automatically handle container naming and networking.
+```bash
 docker compose up -d
 ```
 
-The API will be available at `http://localhost:3000`.
-Swagger Documentation: `http://localhost:3000/docs`
+#### 3. Accessing the System
+Once the services are running, the system exposes the following ports on your machine:
+
+| Service | Local Port | Usage |
+| :--- | :--- | :--- |
+| **API** | `3000` | The main invoice system API |
+| **PostgreSQL** | `5432` | Primary database |
+| **Redis** | `6379` | Task queue and cache |
+
+- **Swagger Documentation**: Open [http://localhost:3000/docs](http://localhost:3000/docs) to view and test the API.
+- **Health Check**: Visit [http://localhost:3000/health](http://localhost:3000/health) to confirm the service is up.
 
 ---
 
