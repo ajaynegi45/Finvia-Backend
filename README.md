@@ -1,6 +1,6 @@
 # Finvia Invoice Backend
 
-A robust invoice management system built with Node.js, Express, and PostgreSQL. This backend provides a secure, transaction-safe environment for managing the lifecycle of invoices, from draft creation to finalization and payment.
+A robust invoice management system built with Express, PostgreSQL and BullMQ. This backend provides a secure, transaction-safe environment for managing the lifecycle of invoices, from draft creation to finalization and payment.
 
 ## 🚀 Tech Stack
 
