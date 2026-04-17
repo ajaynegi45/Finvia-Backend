@@ -15,27 +15,27 @@ Finvia provides a resilient backend for managing invoice lifecycles with strict 
 
 ---
 
-## 🏗 Architectural Choices & Defense
+## 🏗 Architectural
 
 ### 1. Feature-Based Modular Architecture
-The project organizes code into domain-specific modules (`src/modules/invoices`, `src/modules/products`, `src/modules/audit`).
-- **Defense**: This structure ensures clear boundaries. If a specific domain (like Invoices) requires massive scaling, its logic is already encapsulated, making it trivial to extract into a dedicated microservice without refactoring the entire codebase.
+- The project organizes code into domain-specific modules (`src/modules/invoices`, `src/modules/products`, `src/modules/audit`).
+- This structure ensures clear boundaries. If a specific domain (like Invoices) requires massive scaling, its logic is already encapsulated, making it trivial to extract into a dedicated microservice without refactoring the entire codebase.
 
 ### 2. Transactional Audit Trail
-Every state change (Create, Finalize, Pay, Void) executes within a single PostgreSQL transaction that simultaneously updates the invoice and writes a record to the `audit_logs` table.
-- **Defense**: This guarantees absolute consistency between the system state and the audit trail. You can never have a status change without a corresponding audit log.
+- Every state change (Create, Finalize, Pay, Void) executes within a single PostgreSQL transaction that simultaneously updates the invoice and writes a record to the `audit_logs` table.
+- This guarantees absolute consistency between the system state and the audit trail. You can never have a status change without a corresponding audit log.
 
 ### 3. Optimistic Concurrency Control
-The system uses a `version` column for all invoice updates. Every transition checks the current version before applying changes.
-- **Defense**: This prevents race conditions in high-concurrency scenarios (e.g., two users trying to finalize the same invoice simultaneously). The system rejects stale updates, ensuring data integrity without the performance overhead of pessimistic locking.
+- The system uses a `version` column for all invoice updates. Every transition checks the current version before applying changes.
+- This prevents race conditions in high-concurrency scenarios (e.g., two users trying to finalize the same invoice simultaneously). The system rejects stale updates, ensuring data integrity without the performance overhead of pessimistic locking.
 
 ### 4. Immutable Snapshots
-When an invoice is created, the system snapshots product details (Name, SKU, Price) into the `invoice_items` table.
-- **Defense**: This preserves historical accuracy. Changing a product's price in the master catalog will not alter existing invoices, ensuring audit-compliant financial records.
+- When an invoice is created, the system snapshots product details (Name, SKU, Price) into the `invoice_items` table.
+- This preserves historical accuracy. Changing a product's price in the master catalog will not alter existing invoices, ensuring audit-compliant financial records.
 
 ### 5. Decoupled Asynchronous Processing
-Heavy tasks (PDF generation, Email simulation) are offloaded to BullMQ workers once an invoice reaches the `FINALIZED` state.
-- **Defense**: This keeps the API responsive. Users receive a success response immediately, while the system handles background processing reliably with built-in retries and backoff strategies.
+- Heavy tasks (PDF generation, Email simulation) are offloaded to BullMQ workers once an invoice reaches the `FINALIZED` state.
+- This keeps the API responsive. Users receive a success response immediately, while the system handles background processing reliably with built-in retries and backoff strategies.
 
 ---
 
