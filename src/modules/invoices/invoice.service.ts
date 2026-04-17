@@ -4,11 +4,17 @@ import type { CreateInvoiceInput, UpdateInvoiceItemsInput, ListInvoicesQuery } f
 import type { InvoiceDetail, InvoiceSummary, PaginatedResult } from '../../types/domain';
 import { normalizePagination } from '../../utils/pagination';
 import { calculateSubtotalPaise, calculateTotalPaise } from '../../utils/money';
+import { AuditService } from '../audit/audit.service';
 import { ProductRepository } from '../products/product.repository';
 import { InvoiceRepository } from './invoice.repository';
 import { InvoiceItemRepository } from './invoiceItem.repository';
 import { assertInvoiceDraft, assertInvoiceTransition, assertProtectedActor } from './invoice.state';
 import { enqueueInvoiceFinalizedJobs } from './invoice.queue';
+
+type ActorContext = {
+  actorId: string;
+  actorRole: string;
+};
 
 function normalizeSelections(items: { productId: string; quantity: number }[]) {
   const map = new Map<string, number>();
@@ -96,7 +102,7 @@ async function loadInvoiceDetail(invoiceId: string): Promise<InvoiceDetail | nul
 }
 
 export const InvoiceService = {
-  async createDraftInvoice(input: CreateInvoiceInput, actorId: string): Promise<InvoiceDetail> {
+  async createDraftInvoice(input: CreateInvoiceInput, actor: ActorContext): Promise<InvoiceDetail> {
     const selections = normalizeSelections(input.items);
     const snapshotItems = await buildSnapshotItems(selections);
     const totals = calculateTotals(snapshotItems);
@@ -108,8 +114,8 @@ export const InvoiceService = {
         subtotalPaise: totals.subtotalPaise,
         taxPaise: totals.taxPaise,
         totalPaise: totals.totalPaise,
-        createdBy: actorId,
-        updatedBy: actorId,
+        createdBy: actor.actorId,
+        updatedBy: actor.actorId,
       });
 
       if (!invoice) {
@@ -124,12 +130,25 @@ export const InvoiceService = {
         }))
       );
 
+      await AuditService.write(tx, {
+        invoiceId: invoice.id,
+        action: 'INVOICE_CREATED',
+        actorId: actor.actorId,
+        actorRole: actor.actorRole,
+        metadata: {
+          itemCount: snapshotItems.length,
+          subtotalPaise: totals.subtotalPaise,
+          taxPaise: totals.taxPaise,
+          totalPaise: totals.totalPaise,
+        },
+      });
+
       const items = await InvoiceItemRepository.findByInvoiceId(tx, invoice.id);
       return mapDetail(invoice, items);
     });
   },
 
-  async updateDraftInvoiceItems(invoiceId: string, input: UpdateInvoiceItemsInput, actorId: string): Promise<InvoiceDetail> {
+  async updateDraftInvoiceItems(invoiceId: string, input: UpdateInvoiceItemsInput, actor: ActorContext): Promise<InvoiceDetail> {
     const selections = normalizeSelections(input.items);
     const snapshotItems = await buildSnapshotItems(selections);
     const totals = calculateTotals(snapshotItems);
@@ -152,20 +171,34 @@ export const InvoiceService = {
         invoiceId,
         expectedVersion: invoice.version,
         totals,
-        actorId,
+        actorId: actor.actorId,
       });
 
       if (!updatedInvoice) {
         throw new AppError('Invoice changed while updating. Please retry.', 409, 'INVOICE_CONCURRENT_UPDATE');
       }
 
+      await AuditService.write(tx, {
+        invoiceId,
+        action: 'INVOICE_ITEMS_UPDATED',
+        actorId: actor.actorId,
+        actorRole: actor.actorRole,
+        metadata: {
+          itemCount: snapshotItems.length,
+          subtotalPaise: totals.subtotalPaise,
+          taxPaise: totals.taxPaise,
+          totalPaise: totals.totalPaise,
+          version: updatedInvoice.version,
+        },
+      });
+
       const latestItems = await InvoiceItemRepository.findByInvoiceId(tx, invoiceId);
       return mapDetail(updatedInvoice, latestItems);
     });
   },
 
-  async finalizeInvoice(invoiceId: string, actorId?: string): Promise<InvoiceDetail> {
-    assertProtectedActor(actorId);
+  async finalizeInvoice(invoiceId: string, actor: ActorContext): Promise<InvoiceDetail> {
+    assertProtectedActor(actor.actorId);
 
     const finalized = await db.transaction(async (tx) => {
       const invoice = await InvoiceRepository.findById(tx, invoiceId);
@@ -180,7 +213,7 @@ export const InvoiceService = {
         expectedVersion: invoice.version,
         fromStatus: 'DRAFT',
         toStatus: 'FINALIZED',
-        actorId,
+        actorId: actor.actorId,
         invoiceNumber,
         finalizedAt: new Date(),
       });
@@ -188,6 +221,19 @@ export const InvoiceService = {
       if (!updatedInvoice) {
         throw new AppError('Invoice was already modified. Please retry.', 409, 'INVOICE_CONCURRENT_FINALIZE');
       }
+
+      await AuditService.write(tx, {
+        invoiceId,
+        action: 'INVOICE_FINALIZED',
+        actorId: actor.actorId,
+        actorRole: actor.actorRole,
+        metadata: {
+          fromStatus: 'DRAFT',
+          toStatus: 'FINALIZED',
+          invoiceNumber,
+          version: updatedInvoice.version,
+        },
+      });
 
       const items = await InvoiceItemRepository.findByInvoiceId(tx, invoiceId);
       return { invoice: updatedInvoice, items };
@@ -205,8 +251,8 @@ export const InvoiceService = {
     return mapDetail(finalized.invoice, finalized.items);
   },
 
-  async markInvoicePaid(invoiceId: string, actorId?: string): Promise<InvoiceDetail> {
-    assertProtectedActor(actorId);
+  async markInvoicePaid(invoiceId: string, actor: ActorContext): Promise<InvoiceDetail> {
+    assertProtectedActor(actor.actorId);
 
     return db.transaction(async (tx) => {
       const invoice = await InvoiceRepository.findById(tx, invoiceId);
@@ -218,7 +264,7 @@ export const InvoiceService = {
         expectedVersion: invoice.version,
         fromStatus: 'FINALIZED',
         toStatus: 'PAID',
-        actorId,
+        actorId: actor.actorId,
         paidAt: new Date(),
       });
 
@@ -226,13 +272,25 @@ export const InvoiceService = {
         throw new AppError('Invoice changed while marking paid. Please retry.', 409, 'INVOICE_CONCURRENT_PAY');
       }
 
+      await AuditService.write(tx, {
+        invoiceId,
+        action: 'INVOICE_PAID',
+        actorId: actor.actorId,
+        actorRole: actor.actorRole,
+        metadata: {
+          fromStatus: 'FINALIZED',
+          toStatus: 'PAID',
+          version: updated.version,
+        },
+      });
+
       const items = await InvoiceItemRepository.findByInvoiceId(tx, invoiceId);
       return mapDetail(updated, items);
     });
   },
 
-  async voidInvoice(invoiceId: string, actorId?: string): Promise<InvoiceDetail> {
-    assertProtectedActor(actorId);
+  async voidInvoice(invoiceId: string, actor: ActorContext): Promise<InvoiceDetail> {
+    assertProtectedActor(actor.actorId);
 
     return db.transaction(async (tx) => {
       const invoice = await InvoiceRepository.findById(tx, invoiceId);
@@ -244,13 +302,25 @@ export const InvoiceService = {
         expectedVersion: invoice.version,
         fromStatus: 'FINALIZED',
         toStatus: 'VOID',
-        actorId,
+        actorId: actor.actorId,
         voidedAt: new Date(),
       });
 
       if (!updated) {
         throw new AppError('Invoice changed while voiding. Please retry.', 409, 'INVOICE_CONCURRENT_VOID');
       }
+
+      await AuditService.write(tx, {
+        invoiceId,
+        action: 'INVOICE_VOIDED',
+        actorId: actor.actorId,
+        actorRole: actor.actorRole,
+        metadata: {
+          fromStatus: 'FINALIZED',
+          toStatus: 'VOID',
+          version: updated.version,
+        },
+      });
 
       const items = await InvoiceItemRepository.findByInvoiceId(tx, invoiceId);
       return mapDetail(updated, items);
